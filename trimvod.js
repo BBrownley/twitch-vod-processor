@@ -1,6 +1,8 @@
 const util = require("util");
-const fs = require("fs");
+const fs = require("fs").promises;
 const { spawn } = require("node:child_process");
+const { rm } = require("node:fs/promises");
+const os = require("os");
 
 // example: chat messages found at [20,29, 31, 51, 55, 90, 97, 120], run clip for at least 10 seconds after message sent
 // continue clip across two points (a,b) with <10s diff, run for at least another 10s after point b
@@ -40,7 +42,8 @@ console.log(trimPositions);
 
 function runAsync(cmd, args) {
   return new Promise((resolve, reject) => {
-    const p = spawn(cmd, args);
+    const p = spawn(cmd, args, { stdio: "inherit" });
+    console.log(`${cmd} | ${args}`);
 
     p.on("close", (code) => {
       if (code === 0) {
@@ -59,8 +62,8 @@ async function generateClips() {
   // ffmpeg -ss START -to FINISH -i vodsrc -c copy clipNUM.mp4
 
   console.log("generating clips...");
-  await fs.promises.mkdir("fragments");
-  //await fs.writeFileSync("fragments.txt");
+  await fs.mkdir("fragments");
+  await fs.writeFile("fragments.txt", "");
 
   /* fragments.txt example
 
@@ -85,19 +88,48 @@ async function generateClips() {
       `fragments/clip${i}.mp4`,
     ]);
 
-    clipNames.push(`clip${i}.mp4`);
+    const fragmentIdentifier = `file 'fragments/clip${i}.mp4'`;
+    await fs.appendFile("fragments.txt", `${fragmentIdentifier}${os.EOL}`, "utf8");
   }
 }
 
 async function concatClips() {
   console.log("concatenating clips...");
-  await runAsync("ffmpeg", ["-f", "concat", "-safe", "0", "-i", "fragments.txt", "-c", "copy", "output.mp4"]);
+  await runAsync("ffmpeg", [
+    "-y",
+    "-f",
+    "concat",
+    "-safe",
+    "0",
+    "-i",
+    "fragments.txt",
+    "-c",
+    "copy",
+    "output.mp4",
+  ]);
 }
 
 async function main() {
-  await generateClips();
-  console.log("clips finished processing");
-  console.log(clipNames);
+  try {
+    // clean up previously used fragment files if not already done
+    await rm("fragments", { recursive: true, force: true });
+    await rm("fragments.txt", { force: true });
+
+    await generateClips();
+    console.log("clips finished processing");
+
+    console.log("concatenating clips...");
+    await concatClips();
+
+    console.log("done!");
+
+    // cleanup
+
+    await rm("fragments", { recursive: true, force: true });
+    await rm("fragments.txt", { force: true });
+  } catch (error) {
+    console.log(error);
+  }
 }
 
 main();
