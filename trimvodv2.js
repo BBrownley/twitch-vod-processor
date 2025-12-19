@@ -9,7 +9,7 @@ const runAsync = require("./runasync");
 const delay = 3; // start recording # of seconds + 1.5 after chat message was sent (note: base delay of 1.5s to trim ends)
 let minSegmentLength = 6; // record at least this # of seconds if there are no other messages
 
-const vodID = 2647300244;
+const vodID = 2645665531;
 const chatJsonFile = "chat.json";
 
 // ignore these chatters when accounting for segment timestamps (e.g. bots)
@@ -41,7 +41,8 @@ async function processChat() {
   vodLength = data.video.length;
 
   // get offset seconds of each message
-  data.comments.forEach((comment) => {
+
+  for (const comment of data.comments) {
     if (!chatIgnores.includes(comment.commenter.display_name)) {
       chatTimestamps.push(comment.content_offset_seconds + delay);
 
@@ -53,7 +54,7 @@ async function processChat() {
         messages.push(comment.message.body);
       }
     }
-  });
+  }
 
   // calculate start/end times for each segment
 
@@ -103,7 +104,7 @@ async function downloadSegments() {
     file 'fragments/clip3.mp4'
   */
 
-  for (let i = 0; i < trimPositions.length; i++) {
+  for (let i = 0; i < 5; i++) {
     const [start, end] = trimPositions[i];
     const fragmentPath = `fragments/clip${i}.mp4`;
     const trimmedFragmentPath = `trimmed_clips/clip${i}.mp4`; // fragments will be moved to a new dir before being concatenated
