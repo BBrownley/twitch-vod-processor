@@ -6,7 +6,7 @@ const { rm } = require("node:fs/promises");
 const os = require("os");
 const runAsync = require("./runasync");
 
-const delay = 3; // start recording # of seconds after chat message was sent
+const delay = 3; // start recording # of seconds + 1.5 after chat message was sent (note: base delay of 1.5s to trim ends)
 const minSegmentLength = 10; // record at least this # of seconds if there are no other messages
 
 const vodID = 2647300244;
@@ -85,9 +85,10 @@ async function downloadSegments() {
     file 'fragments/clip3.mp4'
   */
 
-  for (let i = 0; i < trimPositions.length; i++) {
+  for (let i = 0; i < 10; i++) {
     const [start, end] = trimPositions[i];
     const fragmentPath = `fragments/clip${i}.mp4`;
+    const trimmedFragmentPath = `trimmed_clips/clip${i}.mp4`; // fragments will be moved to a new dir before being concatenated
 
     await runAsync("twitch-downloader", [
       "videodownload",
@@ -101,8 +102,14 @@ async function downloadSegments() {
       end,
     ]);
 
-    await fs.appendFile("fragments.txt", `file ${fragmentPath}${os.EOL}`);
+    await fs.appendFile("fragments.txt", `file ${trimmedFragmentPath}${os.EOL}`);
   }
+}
+
+// -----------------------------------------------------------
+
+async function trimSegments() {
+  await runAsync("bash", ["trimclips.sh"]);
 }
 
 // -----------------------------------------------------------
@@ -117,7 +124,9 @@ async function concatClips() {
     "0",
     "-i",
     "fragments.txt",
-    "-c",
+    "-c:v",
+    "libx264",
+    "-c:a",
     "copy",
     "output.mp4",
   ]);
@@ -131,20 +140,26 @@ async function main() {
     await rm("chat.json", { force: true });
     await rm("fragments.txt", { force: true });
     await rm("fragments", { recursive: true, force: true });
+    await rm("trimmed_clips", { recursive: true, force: true });
 
     // determine VOD segments to download
     await processChat();
 
     // run command to download all segments
     await downloadSegments();
+
+    // trim beginning/ends of segments and re-encode (removes stuttering)
+    await trimSegments();
+
     // concat all segments
     await concatClips();
 
     console.log("done!");
 
-    await rm("fragments", { recursive: true, force: true });
-    await rm("fragments.txt", { force: true });
     await rm("chat.json", { force: true });
+    await rm("fragments.txt", { force: true });
+    await rm("fragments", { recursive: true, force: true });
+    await rm("trimmed_clips", { recursive: true, force: true });
   } catch (error) {
     console.log(error);
   }
