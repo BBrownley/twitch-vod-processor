@@ -7,13 +7,23 @@ const os = require("os");
 const runAsync = require("./runasync");
 
 const delay = 3; // start recording # of seconds + 1.5 after chat message was sent (note: base delay of 1.5s to trim ends)
-const minSegmentLength = 10; // record at least this # of seconds if there are no other messages
+let minSegmentLength = 6; // record at least this # of seconds if there are no other messages
 
 const vodID = 2647300244;
 const chatJsonFile = "chat.json";
 
 // ignore these chatters when accounting for segment timestamps (e.g. bots)
 const chatIgnores = ["twitchchat_gaming"];
+
+// -----------------------------------------------------------
+
+// Custom settings for changing the minSegmentLength based off chat message length
+
+let dynamicTimings = true;
+
+const dynamicMinSegmentLengths = []; // 1:1 mapping of chat messages to dynamic minSegmentLengths
+const secondsPerChar = 0.7;
+const messages = [];
 
 // -----------------------------------------------------------
 
@@ -34,10 +44,16 @@ async function processChat() {
   data.comments.forEach((comment) => {
     if (!chatIgnores.includes(comment.commenter.display_name)) {
       chatTimestamps.push(comment.content_offset_seconds + delay);
+
+      if (dynamicTimings) {
+        const messageLength = comment.message.body.length;
+        const segmentLength = messageLength * secondsPerChar + minSegmentLength;
+
+        dynamicMinSegmentLengths.push(segmentLength);
+        messages.push(comment.message.body);
+      }
     }
   });
-
-  console.log(chatTimestamps);
 
   // calculate start/end times for each segment
 
@@ -45,6 +61,10 @@ async function processChat() {
   let prev = start;
 
   for (let i = 1; i <= chatTimestamps.length; i++) {
+    if (dynamicTimings) {
+      minSegmentLength = dynamicMinSegmentLengths[i - 1] ?? vodLength;
+    }
+
     // next message is minSegmentLength or less seconds since prev
     if (chatTimestamps[i] - prev <= minSegmentLength) {
       prev = chatTimestamps[i];
@@ -67,8 +87,6 @@ async function processChat() {
       prev = start;
     }
   }
-
-  console.log(trimPositions);
 }
 
 // -----------------------------------------------------------
@@ -85,7 +103,7 @@ async function downloadSegments() {
     file 'fragments/clip3.mp4'
   */
 
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < trimPositions.length; i++) {
     const [start, end] = trimPositions[i];
     const fragmentPath = `fragments/clip${i}.mp4`;
     const trimmedFragmentPath = `trimmed_clips/clip${i}.mp4`; // fragments will be moved to a new dir before being concatenated
@@ -145,13 +163,13 @@ async function main() {
     // determine VOD segments to download
     await processChat();
 
-    // run command to download all segments
+    // // run command to download all segments
     await downloadSegments();
 
-    // trim beginning/ends of segments and re-encode (removes stuttering)
+    // // trim beginning/ends of segments and re-encode (removes stuttering)
     await trimSegments();
 
-    // concat all segments
+    // // concat all segments
     await concatClips();
 
     console.log("done!");
