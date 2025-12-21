@@ -142,16 +142,13 @@ async function main() {
     await concatClips();
 
     console.log("done!");
-    console.log(`Combined ${trimPositions.length} clips in ${}`);
-    console.log(`Outputting segment data: trimPositions-${vodID}.txt`)
- 
-    
+    console.log(`Combined ${trimPositions.length} clips`);
+    console.log(`Outputting segment data: trimPositions-${vodID}.txt`);
+
     const content = trimPositions.join("\n");
-    
-    
+
     await fs.writeFile(`trimPositions-${vodID}.txt`, "");
     await fs.appendFile(`trimPositions-${vodID}.txt`, content);
-
 
     // await rm("chat.json", { force: true });
     // await rm("fragments.txt", { force: true });
