@@ -5,11 +5,13 @@ const path = require("path");
 const { rm } = require("node:fs/promises");
 const os = require("os");
 const runAsync = require("./runasync");
+const calculateTrimPositions = require("./calculateTrimPositions");
+const calculateCommandLength = require("./calculateCommandLength");
 
-const delay = 3; // start recording # of seconds + 1.5 after chat message was sent (note: base delay of 1.5s to trim ends)
-let minSegmentLength = 6; // record at least this # of seconds if there are no other messages
+const delay = 2; // start recording # of seconds + 1.5 after chat message was sent (note: base delay of 1.5s to trim ends)
+let minSegmentLength = 10; // record at least this # of seconds if there are no other messages
 
-const vodID = 2645665531;
+const vodID = 2648348018;
 const chatJsonFile = "chat.json";
 
 // ignore these chatters when accounting for segment timestamps (e.g. bots)
@@ -28,8 +30,10 @@ const messages = [];
 // -----------------------------------------------------------
 
 const chatTimestamps = [];
-const trimPositions = [];
+let trimPositions;
 let vodLength;
+
+// -----------------------------------------------------------
 
 async function processChat() {
   // download chat into json file
@@ -48,7 +52,7 @@ async function processChat() {
 
       if (dynamicTimings) {
         const messageLength = comment.message.body.length;
-        const segmentLength = messageLength * secondsPerChar + minSegmentLength;
+        const segmentLength = calculateCommandLength(comment.message.body) + minSegmentLength;
 
         dynamicMinSegmentLengths.push(segmentLength);
         messages.push(comment.message.body);
@@ -56,38 +60,7 @@ async function processChat() {
     }
   }
 
-  // calculate start/end times for each segment
-
-  let start = chatTimestamps[0];
-  let prev = start;
-
-  for (let i = 1; i <= chatTimestamps.length; i++) {
-    if (dynamicTimings) {
-      minSegmentLength = dynamicMinSegmentLengths[i - 1] ?? vodLength;
-    }
-
-    // next message is minSegmentLength or less seconds since prev
-    if (chatTimestamps[i] - prev <= minSegmentLength) {
-      prev = chatTimestamps[i];
-    }
-
-    // next message is in >minSegmentLength
-    else {
-      if (prev + minSegmentLength > vodLength) {
-        // end of VOD
-
-        if (start < vodLength) {
-          trimPositions.push([start, vodLength]);
-        }
-      } else {
-        trimPositions.push([start, prev + minSegmentLength]);
-      }
-
-      // reset positions for next clip
-      start = chatTimestamps[i];
-      prev = start;
-    }
-  }
+  trimPositions = calculateTrimPositions(chatTimestamps, dynamicMinSegmentLengths);
 }
 
 // -----------------------------------------------------------
@@ -96,15 +69,9 @@ async function downloadSegments() {
   await fs.mkdir("fragments");
   await fs.writeFile("fragments.txt", "");
 
-  /* fragments.txt example
+  console.log(`Downloading ${trimPositions.length} VOD segments`);
 
-    file 'fragments/clip0.mp4'
-    file 'fragments/clip1.mp4'
-    file 'fragments/clip2.mp4'
-    file 'fragments/clip3.mp4'
-  */
-
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < trimPositions.length; i++) {
     const [start, end] = trimPositions[i];
     const fragmentPath = `fragments/clip${i}.mp4`;
     const trimmedFragmentPath = `trimmed_clips/clip${i}.mp4`; // fragments will be moved to a new dir before being concatenated
@@ -143,11 +110,12 @@ async function concatClips() {
     "0",
     "-i",
     "fragments.txt",
-    "-c:v",
-    "libx264",
-    "-c:a",
+    // "-c:v",
+    // "libx264",
+    // "-c:a",
+    "-c",
     "copy",
-    "output.mp4",
+    `vod-${vodID}-trimmed-${Date.now()}.mp4`,
   ]);
 }
 
@@ -164,7 +132,7 @@ async function main() {
     // determine VOD segments to download
     await processChat();
 
-    // // run command to download all segments
+    // run command to download all segments
     await downloadSegments();
 
     // // trim beginning/ends of segments and re-encode (removes stuttering)
@@ -174,11 +142,21 @@ async function main() {
     await concatClips();
 
     console.log("done!");
+    console.log(`Combined ${trimPositions.length} clips in ${}`);
+    console.log(`Outputting segment data: trimPositions-${vodID}.txt`)
+ 
+    
+    const content = trimPositions.join("\n");
+    
+    
+    await fs.writeFile(`trimPositions-${vodID}.txt`, "");
+    await fs.appendFile(`trimPositions-${vodID}.txt`, content);
 
-    await rm("chat.json", { force: true });
-    await rm("fragments.txt", { force: true });
-    await rm("fragments", { recursive: true, force: true });
-    await rm("trimmed_clips", { recursive: true, force: true });
+
+    // await rm("chat.json", { force: true });
+    // await rm("fragments.txt", { force: true });
+    // await rm("fragments", { recursive: true, force: true });
+    // await rm("trimmed_clips", { recursive: true, force: true });
   } catch (error) {
     console.log(error);
   }
