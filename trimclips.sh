@@ -1,10 +1,9 @@
-mkdir -p trimmed_clips
+mkdir -p trimmed_clips-$1-$2
 
-for f in fragments/*.mp4; do
-  echo "hi"
+for f in fragments-$1-$2/*.mp4; do
   echo "$f"
     filename=$(basename "$f")
-    outfile="trimmed_clips/$filename"
+    outfile="trimmed_clips-$1-$2/$filename"
 
     # # Get duration of the clip in seconds
     duration=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$f")
