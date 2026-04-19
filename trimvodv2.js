@@ -13,7 +13,7 @@ const { start } = require("repl");
 const delay = 2; // start recording # of seconds + 1.5 after chat message was sent (note: base delay of 1.5s to trim ends)
 let minSegmentLength = 18; // record at least this # of seconds if there are no other messages
 
-const vodID = 2664248292;
+const vodID = 2741190019;
 const chatJsonFile = `chat-${vodID}.json`;
 
 const startTime = Date.now();

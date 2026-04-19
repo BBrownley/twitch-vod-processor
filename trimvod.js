@@ -1,8 +1,9 @@
 const util = require("util");
 const fs = require("fs").promises;
-const { spawn } = require("node:child_process");
+
 const { rm } = require("node:fs/promises");
 const os = require("os");
+const runAsync = require("./runasync");
 
 // example: chat messages found at [20,29, 31, 51, 55, 90, 97, 120], run clip for at least 10 seconds after message sent
 // continue clip across two points (a,b) with <10s diff, run for at least another 10s after point b
@@ -39,24 +40,6 @@ for (let i = 1; i <= timestamps.length; i++) {
 }
 
 console.log(trimPositions);
-
-function runAsync(cmd, args) {
-  return new Promise((resolve, reject) => {
-    const p = spawn(cmd, args, { stdio: "inherit" });
-    console.log(`${cmd} | ${args}`);
-
-    p.on("close", (code) => {
-      if (code === 0) {
-        console.log(`done with command ${cmd}: ${args}`);
-        resolve();
-      } else {
-        reject(new Error(`${cmd} failed (${code})`));
-      }
-    });
-  });
-}
-
-const clipNames = [];
 
 async function generateClips() {
   // ffmpeg -ss START -to FINISH -i vodsrc -c copy clipNUM.mp4
